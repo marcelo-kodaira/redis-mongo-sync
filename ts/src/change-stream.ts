@@ -14,7 +14,7 @@ async function main() {
     const pipeline = [
       {
         $match: {
-          operationType: "insert",
+          operationType: { $in: ["insert", "update", "delete"] },
         },
       },
     ];
@@ -28,7 +28,7 @@ async function main() {
     // await monitorListingsUsingHasNext(client, 30000, pipeline);
 
     // Method 3: Using Stream API
-    console.log("running")
+    console.log("running");
     await monitorListingsUsingStreamAPI(client, pipeline);
   } finally {
     await client.close();

@@ -19,11 +19,19 @@ services:
       - "mongo1_data:/data/db"
       - "mongo1_config:/data/configdb"
 
-  redis:
+  redis_bull:
     image: redis:latest
-    container_name: redis
+    container_name: redis_bullMq
     ports:
       - "6380:6379"
+
+  redis:
+    image: redis/redis-stack-server:latest
+    container_name: redis
+    ports:
+      - "6381:6379"  # Redis server port
+      - "8001:8001"  # RedisInsight web UI port
+
 
 volumes:
   mongo1_data:

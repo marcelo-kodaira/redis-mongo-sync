@@ -1,58 +1,98 @@
-import { Worker } from 'bullmq';
-import Redis from 'ioredis';
+import { Worker } from "bullmq";
+import Redis from "ioredis";
 
-const redis = new Redis();
+const redis = new Redis({
+  port: 6381,
+});
 
 const worker = new Worker(
-  'mongo-redis',
-  
+  "mongo-redis",
+
   async (job) => {
-    try {
-      const fullDocument = job.data.fullDocument;
-      console.log('Processing document:', JSON.stringify(fullDocument));
+    const jobData = job.data;
 
-      const documentId = fullDocument._id.toString();
+    const operationType = job.data.operationType;
 
-      const flattenedDocument = flattenObject(fullDocument);
-
-      await redis.hset(documentId, flattenedDocument);
-
-      console.log(`Saved to Redis hash: key:${documentId}`);
-
-      await createIndexes(flattenedDocument, documentId);
-
-      console.log(`Indexes created for document ID: ${documentId}`);
-    } catch (error) {
-      console.error(`Error processing job ${job.id}:`, error);
-    }
+    await operationMapper[operationType](jobData);
   },
   {
     concurrency: 20,
     connection: {
-      host: 'localhost',
+      host: "localhost",
       port: 6380,
     },
   }
 );
 
-worker.on('completed', (job) => {
-  console.log(`Job completed: ${job.data.fullDocument._id}`);
+worker.on("completed", (job) => {
+  console.log(`Job completed: ${job.id}`);
 });
 
-worker.on('failed', (job, err) => {
+worker.on("failed", (job, err) => {
   console.error(`Job failed: ${job?.id}`, err);
 });
 
+const operationMapper: Record<string, (jobData: any) => Promise<void>> = {
+  insert: async (jobData: any) => {
+    console.log("Inserting document:", JSON.stringify(jobData.fullDocument));
+    await addDocumentToRedis(jobData.fullDocument);
+  },
+  update: async (jobData: any) => {
+    console.log("Updating document:", JSON.stringify(jobData.fullDocument));
+  },
+  delete: async (jobData: any) => {
+    await deleteDocumentFromRedis(jobData.documentKey._id.toString());
+  },
+};
+
+const addDocumentToRedis = async (fullDocument: any) => {
+  try {
+    await redis.call(
+      "JSON.SET",
+      fullDocument._id.toString(),
+      ".",
+      JSON.stringify(fullDocument)
+    );
+  } catch (error) {
+    console.error("Error adding document to Redis:", error);
+  }
+};
+
+const deleteDocumentFromRedis = async (documentId: string) => {
+  try {
+    await redis.del(documentId);
+  } catch (error) {
+    console.error("Error deleting document from Redis:", error);
+  }
+};
+
+const updateDocumentInRedis = async (fullDocument: any) => {
+  await redis.call(
+    "JSON.SET",
+    fullDocument._id.toString(),
+    ".",
+    JSON.stringify(fullDocument)
+  );
+  //update indexes
+};
+
+// const flattenedDocument = flattenObject(fullDocument);
+
+// await redis.hset(documentId, flattenedDocument);
+
+// await createIndexes(flattenedDocument, documentId);
+
+//console.log(`Saved to Redis hash: key:${documentId}`);
 
 function flattenObject(
   obj: any,
-  parentKey = '',
+  parentKey = "",
   result: { [key: string]: any } = {}
 ): { [key: string]: any } {
   for (const [key, value] of Object.entries(obj)) {
     const compoundKey = parentKey ? `${parentKey}.${key}` : key;
 
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
       flattenObject(value, compoundKey, result);
     } else {
       result[compoundKey] = value;
@@ -61,9 +101,8 @@ function flattenObject(
   return result;
 }
 
-
 async function createIndexes(document: any, documentId: string) {
-  const indexFields = ['name', 'address.city'];
+  const indexFields = ["name", "address.city"];
 
   for (const field of indexFields) {
     if (document[field] !== undefined && document[field] !== null) {
@@ -76,4 +115,5 @@ async function createIndexes(document: any, documentId: string) {
       );
     }
   }
+
 }
