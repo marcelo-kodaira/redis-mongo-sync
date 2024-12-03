@@ -66,6 +66,16 @@ const deleteDocumentFromRedis = async (documentId: string) => {
   }
 };
 
+const shutdown = async () => {
+  await worker.close();
+  await redis.quit();
+  process.exit(0);
+};
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+
+
 const updateDocumentInRedis = async (fullDocument: any) => {
   await redis.call(
     "JSON.SET",
