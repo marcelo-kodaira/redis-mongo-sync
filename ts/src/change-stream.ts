@@ -127,7 +127,16 @@ async function monitorListingsUsingStreamAPI(
       new Writable({
         objectMode: true,
         write(doc: ChangeStreamDocument<any>, _, callback) {
-          queue.add("mongo-redis", doc);
+          queue.add("mongo-redis", doc, {
+            removeOnComplete: {
+              age: 1000 * 60 * 60 * 12,
+              count: 50,
+            },
+            removeOnFail: {
+              age: 1000 * 60 * 60 * 12,
+              count: 200,
+            }
+          });
           console.log(
             "Stream API - Detected change:",
             JSON.stringify(doc, null, 2)
